@@ -293,9 +293,19 @@ onboarded.
 
 ## Status
 
-Early. The neutrality gate and its proof exist; the register, the gates and the
-workflows are being built on top of it. Nothing here claims to be enforced
-until its mechanism is committed and green.
+| Part | State |
+| --- | --- |
+| Neutrality gate, commit and push hooks, authoring adapter | Built |
+| Rule register, validator, derived gate registry | Built |
+| Five capability gates and the runner | Built |
+| Reusable CI workflow for adopters to call | Not built |
+
+Nothing claims to be enforced until its mechanism is committed and green, and
+that applies to this table as much as to a register.
+
+The gap that matters today: an adopter wires the gates in by calling the
+scripts themselves. The reusable workflow, and the required-status-check
+pattern that stops a branch from removing its own gate, are the next piece.
 
 ## Licence
 
