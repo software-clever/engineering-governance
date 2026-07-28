@@ -23,6 +23,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { discoverGateIds, moduleFileFor, GATES_DIR } from '../gates/registry.mjs';
+import { parseRegister, resolveRegisterPath } from './registry-check.mjs';
 
 const CWD = process.cwd();
 
@@ -39,6 +40,18 @@ function git(args) {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
+}
+
+/**
+ * The staged change set, with status letters. Some gates ask which paths a
+ * change TOUCHES, which is a different question from which files exist, and
+ * has no answer outside a diff.
+ */
+function stagedChanges() {
+  return git(['diff', '--cached', '--name-status', '--diff-filter=ACMRD']).map((line) => {
+    const [status, ...paths] = line.split('\t');
+    return { status: status[0], path: paths[paths.length - 1] };
+  });
 }
 
 function targetPaths(argv) {
@@ -81,7 +94,7 @@ export function stripComments(value) {
  * Load and configure the gates named in `config`. Errors rather than skipping
  * on an unknown gate id or bad parameters, so a misconfiguration is loud.
  */
-export async function loadGates(rawConfig, known = discoverGateIds()) {
+export async function loadGates(rawConfig, known = discoverGateIds(), context = {}, warn = () => {}) {
   const config = stripComments(rawConfig);
   const loaded = [];
   for (const [gateId, params] of Object.entries(config)) {
@@ -93,7 +106,22 @@ export async function loadGates(rawConfig, known = discoverGateIds()) {
     // pathToFileURL, not the bare path: on Windows an absolute path like
     // C:\... is rejected by the ESM loader as an unsupported URL scheme.
     const mod = await import(pathToFileURL(join(GATES_DIR, moduleFileFor(gateId))).href);
-    loaded.push({ mod, config: mod.configure(params ?? {}) });
+
+    // A gate may need data only the caller can supply, such as the ids from a
+    // register. Missing data leaves it inert, so it is reported rather than
+    // left to pass quietly behind a green tick.
+    for (const { name, orParam } of mod.wants ?? []) {
+      const fromCaller = context[name] !== undefined;
+      const fromConfig = orParam !== undefined && (params ?? {})[orParam] !== undefined;
+      if (!fromCaller && !fromConfig) {
+        warn(
+          `${gateId} needs "${name}" and will do nothing without it` +
+            (orParam ? `, or set "${orParam}" in its config.` : '.'),
+        );
+      }
+    }
+
+    loaded.push({ mod, config: mod.configure(params ?? {}, context) });
   }
   return loaded;
 }
@@ -107,13 +135,28 @@ function readTextFile(path) {
   return buf.toString('utf8');
 }
 
-export function evaluateAll(gates, files) {
+/**
+ * `changes` is the staged change set, or null when the caller is looking at a
+ * whole tree rather than a diff.
+ *
+ * A gate whose inputKind is "changes" cannot answer anything without one. It
+ * is skipped with a WARNING rather than passing quietly, because a gate that
+ * silently contributes nothing still leaves a green tick that reads as
+ * protection.
+ */
+export function evaluateAll(gates, files, changes = null, warn = () => {}) {
   const findings = [];
-  const pathList = files.map((f) => f.path);
 
   for (const { mod, config } of gates) {
-    if (mod.inputKind === 'paths') {
-      findings.push(...mod.evaluate({ paths: pathList }, config));
+    if (mod.inputKind === 'changes') {
+      if (changes === null) {
+        warn(
+          `${mod.id} needs a change set and was NOT run. ` +
+            'Use --staged; it has nothing to say about a whole tree.',
+        );
+        continue;
+      }
+      findings.push(...mod.evaluate({ changes }, config));
       continue;
     }
     for (const file of files) {
@@ -146,9 +189,19 @@ async function main() {
     process.exit(2);
   }
 
+  // The register has one home, given by --register or $GOVERNANCE_REGISTER.
+  // Resolved once here and injected, so no gate config restates the path and
+  // no gate needs to read a file. Absent is fine: gates wanting it will say so.
+  const registerPath = resolveRegisterPath(argv, process.env);
+  const context = existsSync(registerPath)
+    ? { ruleIds: parseRegister(readFileSync(registerPath, 'utf8')).rules.map((r) => r.id) }
+    : {};
+
   let gates;
   try {
-    gates = await loadGates(config);
+    gates = await loadGates(config, discoverGateIds(), context, (m) =>
+      console.error(`gates: WARNING ${m}`),
+    );
   } catch (err) {
     console.error(`gates: ${err.message}`);
     process.exit(2);
@@ -159,9 +212,12 @@ async function main() {
     return;
   }
 
+  const staged = argv.includes('--staged');
+  const changes = staged ? stagedChanges() : null;
   const paths = targetPaths(argv);
-  if (paths.length === 0) {
-    console.log('gates: no files to check.');
+
+  if (paths.length === 0 && (changes === null || changes.length === 0)) {
+    console.log('gates: nothing to check.');
     return;
   }
 
@@ -170,7 +226,7 @@ async function main() {
     text: readTextFile(path),
   }));
 
-  const findings = evaluateAll(gates, files);
+  const findings = evaluateAll(gates, files, changes, (m) => console.error(`gates: WARNING ${m}`));
 
   if (findings.length > 0) {
     console.error(`gates: ${findings.length} violation(s)`);

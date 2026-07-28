@@ -49,7 +49,7 @@ test('an empty config loads nothing rather than assuming anything', async () => 
   assert.deepEqual(await loadGates({}), []);
 });
 
-test('text gates see each file; paths gates see the list once', async () => {
+test('a text gate sees each readable file in turn', async () => {
   const gates = await loadGates({ 'forbidden-chars': { codepoints: ['U+00A0'] } });
   const findings = evaluateAll(gates, [
     { path: 'a.md', text: 'clean' },
@@ -66,19 +66,81 @@ test('unreadable or binary files are skipped, not reported as clean failures', a
   assert.deepEqual(evaluateAll(gates, [{ path: 'x.bin', text: null }]), []);
 });
 
+test('a changes gate sees the change set once', async () => {
+  const gates = await loadGates({ 'locked-paths': { paths: ['locked.md'] } });
+  const findings = evaluateAll(
+    gates,
+    [],
+    [
+      { path: 'locked.md', status: 'M' },
+      { path: 'other.md', status: 'M' },
+    ],
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].path, 'locked.md');
+});
+
+// A gate contributing nothing while the run still goes green is worse than one
+// that errors: the tick reads as protection either way.
+test('a changes gate outside a change set warns rather than passing quietly', async () => {
+  const gates = await loadGates({ 'locked-paths': { paths: ['locked.md'] } });
+  const warnings = [];
+
+  const findings = evaluateAll(gates, [{ path: 'locked.md', text: 'x' }], null, (m) =>
+    warnings.push(m),
+  );
+
+  assert.deepEqual(findings, []);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /locked-paths needs a change set and was NOT run/);
+});
+
 test('the config path resolves to the caller, never to this engine', () => {
   assert.equal(resolveConfigPath(['--config', '/explicit.json'], {}), '/explicit.json');
   assert.equal(resolveConfigPath([], { GOVERNANCE_GATES: '/env.json' }), '/env.json');
   assert.match(resolveConfigPath([], {}), /governance[\\/]gates\.json$/);
 });
 
-// A broken template is worse than none: it is copied before it is read.
-test('the shipped template is valid JSON and loads against the real gates', async () => {
+// A broken template is worse than none: it is copied before it is read. It
+// must load exactly as shipped, with no paths rewritten, which is only
+// possible because no gate config names a file.
+test('the shipped template loads exactly as shipped', async () => {
   const raw = JSON.parse(readFileSync(join(ROOT, 'gates.example.json'), 'utf8'));
-  const gates = await loadGates(raw, discoverGateIds());
+  const gates = await loadGates(raw, discoverGateIds(), { ruleIds: ['R-1'] });
 
   assert.ok(gates.length > 0, 'the template must configure something');
-  for (const { mod } of gates) {
-    assert.ok(discoverGateIds().includes(mod.id), `${mod.id} must be a real gate`);
-  }
+  assert.deepEqual(
+    gates.map((g) => g.mod.id).sort(),
+    Object.keys(raw)
+      .filter((k) => k !== '//')
+      .sort(),
+    'every gate in the template is loaded, so none is silently skipped',
+  );
+});
+
+// A gate left inert for want of data is silent, and silence behind a green
+// tick reads as protection.
+test('a gate missing the data it declared is announced, not left quiet', async () => {
+  const warnings = [];
+  await loadGates({ 'cited-id-integrity': { marker: 'RULE' } }, discoverGateIds(), {}, (m) =>
+    warnings.push(m),
+  );
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /cited-id-integrity needs "ruleIds"/);
+
+  const supplied = [];
+  await loadGates(
+    { 'cited-id-integrity': { marker: 'RULE' } },
+    discoverGateIds(),
+    { ruleIds: ['R-1'] },
+    (m) => supplied.push(m),
+  );
+  assert.deepEqual(supplied, [], 'silent once the data arrives');
+
+  const explicit = [];
+  await loadGates({ 'cited-id-integrity': { marker: 'RULE', ids: ['R-1'] } }, discoverGateIds(), {}, (m) =>
+    explicit.push(m),
+  );
+  assert.deepEqual(explicit, [], 'and when the config supplies it instead');
 });

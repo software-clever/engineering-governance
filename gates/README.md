@@ -21,6 +21,8 @@ Two directions, because one cannot express the other.
 | `forbidden-chars` | No text may contain these code points | Ban a control character, or a look-alike Unicode space |
 | `forbidden-patterns` | No line may match these patterns | Indent with tabs (forbid a leading space); ban a word |
 | `required-patterns` | Every file in scope must contain a match | A licence header on every source file |
+| `cited-id-integrity` | Every rule citation names an id that exists | A comment marking the code that enforces a rule |
+| `locked-paths` | A change set does not touch locked paths | Making a change to a crown-jewel file deliberate |
 
 `required-patterns` exists because absence is not the negation of presence. "No
 line may say X" and "some line must say X" are different questions, and no
@@ -34,7 +36,7 @@ Each gate is a module at `gates/<id>.gate.mjs` exporting:
 | --- | --- |
 | `id` | Must equal the filename's id. Enforced by `registry.test.mjs`. |
 | `describe` | One line, for listings and error output. |
-| `inputKind` | `text` or `paths`. What `evaluate` is handed. |
+| `inputKind` | `text` or `changes`. What `evaluate` is handed. |
 | `configure(params)` | Validate and normalise config. Throws on bad input. Returns the normalised form. |
 | `evaluate(input, config)` | Return an array of violations. |
 
@@ -43,10 +45,22 @@ reads, no network, no clock, no randomness, and never a language model. A gate
 that consults anything outside its arguments cannot be reasoned about, and a
 gate whose verdict can vary is not a gate.
 
+`configure` may read a file it is explicitly pointed at, because that happens
+once at setup and keeps `evaluate` pure. `cited-id-integrity` reads a register
+this way. If the file is missing it **throws**, rather than proceeding with
+nothing to check: a gate that passes because it could not load its data is the
+worst outcome available to it.
+
 Input by kind:
 
 - `text`: `{ text, path }`, the whole file content and its path.
-- `paths`: `{ paths }`, a list of repository-relative paths.
+- `changes`: `{ changes }`, a list of `{ path, status }` from a diff, where
+  status is a git status letter (`A`, `M`, `D`, `R`).
+
+`changes` exists because "which paths does this change touch" has no answer
+when looking at a whole tree. A gate of that kind is **skipped with a warning**
+outside a change set rather than passing quietly, since a gate that silently
+contributes nothing still leaves a green tick that reads as protection.
 
 A violation is `{ gateId, message, path?, line? }`. **Never put the offending
 text in `message`.** Findings are surfaced in logs and pull requests, and

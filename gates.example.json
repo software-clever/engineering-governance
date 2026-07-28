@@ -40,5 +40,29 @@
     "//": "Absence, which forbidden-patterns cannot express. include is mandatory here.",
     "patterns": [{ "pattern": "Copyright", "message": "source files need a copyright header" }],
     "include": ["^src/.*\\.(js|mjs|ts)$"]
+  },
+
+  "cited-id-integrity": {
+    "//": [
+      "Marks in code that cite a rule must name a rule that exists. Catches the",
+      "drift where a rule is superseded and the comment keeps claiming the link.",
+      "",
+      "No register path here: the register has one home, given to the runner",
+      "with --register or $GOVERNANCE_REGISTER, and repeating it would give the",
+      "same fact two places to disagree. Set 'ids' instead if there is no",
+      "register at all."
+    ],
+    "marker": "RULE",
+    "include": ["\\.(js|mjs|ts)$"]
+  },
+
+  "locked-paths": {
+    "//": [
+      "Makes changing a crown-jewel file deliberate rather than incidental.",
+      "Needs a change set, so it only runs with --staged. Additions are never",
+      "blocked: a file that does not exist yet cannot be silently overwritten."
+    ],
+    "paths": ["governance/rules.md"],
+    "patterns": ["^\\.github/workflows/"]
   }
 }

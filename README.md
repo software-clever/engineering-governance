@@ -111,9 +111,21 @@ engine.
 | `forbidden-chars` | No text may contain these code points |
 | `forbidden-patterns` | No line may match these patterns |
 | `required-patterns` | Every file in scope must contain a match |
+| `cited-id-integrity` | Every rule citation in code names an id that exists |
+| `locked-paths` | A change set does not touch locked paths |
 
 `required-patterns` is not redundant: absence is not the negation of presence,
 and no configuration of `forbidden-patterns` can express "some line must say X".
+
+`cited-id-integrity` closes the loop back to the register. Mark the code that
+implements a rule with a citation, and this catches the citation still claiming
+a link after the rule has been superseded out of existence.
+
+`locked-paths` does not make a file unchangeable. It makes changing it a
+deliberate act rather than a side effect of a larger commit, and the
+`--no-verify` escape hatch is intentional: a lock nobody can lift just gets
+routed around invisibly. Additions are never blocked, because a file that does
+not exist yet cannot be silently overwritten.
 
 Configure them in your own repository and run:
 
