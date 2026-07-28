@@ -1,0 +1,44 @@
+{
+  "//": [
+    "Template gate configuration. Copy to your own repository, usually as",
+    "governance/gates.json, and replace everything below with your rules.",
+    "",
+    "This file is a TEMPLATE. The configuration is layer 3 and belongs to the",
+    "adopter, never to the engine. The entries here illustrate the shape and",
+    "are not recommendations: pick your own conventions.",
+    "",
+    "Every key must name a gate that exists, or the run fails. A typo would",
+    "otherwise leave you believing a rule is enforced while nothing runs.",
+    "",
+    "Scope is regular expressions over repository-relative paths, not globs,",
+    "because a regex means exactly one thing everywhere.",
+    "",
+    "Run: node <engine>/scripts/run-gates.mjs --staged --config governance/gates.json"
+  ],
+
+  "forbidden-chars": {
+    "//": "Invisible characters that survive review because nobody can see them.",
+    "codepoints": ["U+00A0", "U+200B"],
+    "exclude": ["^vendor/", "lock\\.json$"]
+  },
+
+  "forbidden-patterns": {
+    "//": [
+      "Indentation is the clearest illustration that this is a capability.",
+      "'^\\t' means indent with spaces; '^ ' would mean indent with tabs.",
+      "Both are defensible, which is exactly why neither lives in the engine."
+    ],
+    "patterns": [
+      { "pattern": "^\\t", "message": "indent with spaces, not tabs" },
+      { "pattern": "\\bFIXME\\b", "message": "resolve or convert to a tracked issue before merge" }
+    ],
+    "include": ["\\.(js|mjs|ts)$"],
+    "exclude": ["^vendor/"]
+  },
+
+  "required-patterns": {
+    "//": "Absence, which forbidden-patterns cannot express. include is mandatory here.",
+    "patterns": [{ "pattern": "Copyright", "message": "source files need a copyright header" }],
+    "include": ["^src/.*\\.(js|mjs|ts)$"]
+  }
+}

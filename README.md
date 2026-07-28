@@ -98,6 +98,43 @@ enforces. Rules become live only by being ratified in the instance repository,
 through whatever review the organisation configures there. Edit freely, ratify
 deliberately.
 
+## The gates
+
+A gate is a capability, never a rule. `forbidden-patterns` knows how to reject
+lines matching a pattern; it has no view on which patterns anyone should ban.
+Indentation makes the point: "indent with tabs" and "indent with two spaces"
+are the same capability pointed at opposite regexes, so neither belongs in the
+engine.
+
+| Gate | Asserts |
+| --- | --- |
+| `forbidden-chars` | No text may contain these code points |
+| `forbidden-patterns` | No line may match these patterns |
+| `required-patterns` | Every file in scope must contain a match |
+
+`required-patterns` is not redundant: absence is not the negation of presence,
+and no configuration of `forbidden-patterns` can express "some line must say X".
+
+Configure them in your own repository and run:
+
+```sh
+node <engine>/scripts/run-gates.mjs --staged --config governance/gates.json
+```
+
+[`gates.example.json`](gates.example.json) is the template.
+[`gates/README.md`](gates/README.md) is the contract for writing a new one.
+
+**No gate ships a default.** Unconfigured, a gate does nothing and reports
+nothing. That looks like a missing feature and is the opposite: a default is an
+opinion, and an opinion in the engine is a rule that travelled where only
+mechanism should.
+
+Two things are errors rather than warnings, because both would otherwise leave
+you believing a rule is enforced while nothing runs: **a config key naming a
+gate that does not exist**, and **an unknown parameter inside a gate's config**.
+A silently ignored key is this engine's own failure mode reproduced one level
+down.
+
 ## The rule register
 
 A register is an adopter's set of rule records: what they enforce, why, and by

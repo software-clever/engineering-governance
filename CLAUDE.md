@@ -57,6 +57,9 @@ Two consequences that are easy to get wrong:
 
 ## Adding a gate
 
+Read [`gates/README.md`](gates/README.md) for the full contract. The short
+version:
+
 A gate lives at `gates/<id>.gate.mjs` and must export `id` matching its
 filename, with its proof beside it at `gates/<id>.gate.test.mjs`. Both
 couplings are enforced by `gates/registry.test.mjs`, and the id list is derived
@@ -65,6 +68,18 @@ gate cannot exist without a test.
 
 That chain is what lets a rule claim `Status: enforced`: the validator only
 accepts a gate id that resolves to something with a passing proof.
+
+`evaluate` must be pure and deterministic: no file reads, no network, no clock,
+no randomness, never a model. A gate whose verdict can vary is not a gate.
+
+Three things every gate proves, not just the happy path:
+
+- what it **rejects**,
+- what it **allows**,
+- that it is **inert when unconfigured**.
+
+The last one is the portability property. A gate that quietly acquires a
+default has smuggled an opinion into the engine.
 
 ## The engine never depends on adopter data
 
@@ -85,6 +100,7 @@ node scripts/neutrality-check.mjs --staged    # what pre-commit runs
 node scripts/neutrality-check.mjs --history   # what pre-push runs; audits every commit
 node scripts/neutrality-check.mjs --all       # working tree only
 node scripts/registry-check.mjs --register register.example.md   # validate a register
+node scripts/run-gates.mjs --staged --config <adopter-config>    # run configured gates
 ```
 
 The token list lives **outside this repo**, at `~/.config/engineering-governance/tokens`
