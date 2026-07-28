@@ -29,7 +29,12 @@ jobs:
           node-version: 22
       # Quoted so Node expands the glob, not the shell. `node --test <dir>`
       # resolves the directory as a module and fails.
-      - run: node --test "scripts/**/*.test.mjs"
+      - run: node --test "**/*.test.mjs"
+
+      # The register template ships as a starting point, so it must satisfy the
+      # validator it ships with. Uses no adopter data: the template names
+      # nothing and the engine has no register of its own.
+      - run: node scripts/registry-check.mjs --register register.example.md
 
   secret-scan:
     name: Secret scan

@@ -55,6 +55,17 @@ Two consequences that are easy to get wrong:
 - **Ship no defaults.** A gate with a default parameter is a leaked opinion. An
   unconfigured gate correctly does nothing.
 
+## Adding a gate
+
+A gate lives at `gates/<id>.gate.mjs` and must export `id` matching its
+filename, with its proof beside it at `gates/<id>.gate.test.mjs`. Both
+couplings are enforced by `gates/registry.test.mjs`, and the id list is derived
+from disk rather than written down, so an id cannot exist without a gate and a
+gate cannot exist without a test.
+
+That chain is what lets a rule claim `Status: enforced`: the validator only
+accepts a gate id that resolves to something with a passing proof.
+
 ## The engine never depends on adopter data
 
 Dependencies point **from** the adopter **to** the engine, never the reverse.
@@ -69,10 +80,11 @@ If a check seems to need one, it belongs on the adopter's side, not here.
 
 ```sh
 sh scripts/setup.sh                  # install hooks + create the token list, once per clone
-node --test "scripts/**/*.test.mjs"  # all proofs (quote it: `--test <dir>` fails)
+node --test "**/*.test.mjs"          # all proofs (quote it: `--test <dir>` fails)
 node scripts/neutrality-check.mjs --staged    # what pre-commit runs
 node scripts/neutrality-check.mjs --history   # what pre-push runs; audits every commit
 node scripts/neutrality-check.mjs --all       # working tree only
+node scripts/registry-check.mjs --register register.example.md   # validate a register
 ```
 
 The token list lives **outside this repo**, at `~/.config/engineering-governance/tokens`

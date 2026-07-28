@@ -98,6 +98,42 @@ enforces. Rules become live only by being ratified in the instance repository,
 through whatever review the organisation configures there. Edit freely, ratify
 deliberately.
 
+## The rule register
+
+A register is an adopter's set of rule records: what they enforce, why, and by
+what mechanism. It is layer 3, so it lives in their repository and never here.
+[`register.example.md`](register.example.md) is the template and the format
+reference, and `scripts/registry-check.mjs` validates it:
+
+```sh
+node scripts/registry-check.mjs --register governance/rules.md
+```
+
+Each rule carries a statement, a rationale, its kind (`hard` or `soft`), the
+gate that enforces it, a status, a precedence, a scope, a provenance tag and a
+lifecycle. The shape is defined once, in executable form, at the top of
+`scripts/registry-check.mjs`; there is no separate schema file, because this
+engine carries no dependencies and a schema nothing validates is decoration.
+
+Two checks make the register worth more than a list:
+
+**Status may not overstate enforcement.** A rule claiming `enforced` or
+`partial` while naming a gate that does not exist fails validation. A register
+that can award itself credit is worse than no register, because the claim now
+looks audited. A `hard` rule with `Enforcement: none` and `Status: prose` is
+legal: an aspiration labelled as one is honest, and it is the overclaim that
+does damage.
+
+**Supersede, never delete.** Changing a rule means marking it superseded and
+pointing at its replacement, which must exist. The old record stays, so why a
+decision changed remains readable.
+
+The gate ids a rule may name are [derived from the files on
+disk](gates/registry.mjs), never hand-listed, so an id cannot exist without a
+gate. `gates/registry.test.mjs` closes the other half: every gate must export
+the id its filename implies and have a proof beside it. A rule claiming
+enforcement therefore names something that demonstrably works.
+
 ## The neutrality gate
 
 `scripts/neutrality-check.mjs` blocks adopter-identifying content from entering

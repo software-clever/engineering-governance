@@ -37,5 +37,5 @@ fi
 echo ""
 echo "verifying..."
 node scripts/neutrality-check.mjs --all
-node --test "scripts/**/*.test.mjs" >/dev/null
+node --test "**/*.test.mjs" >/dev/null
 echo "ok: gate runs and proofs pass"
