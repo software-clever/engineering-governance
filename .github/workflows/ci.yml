@@ -1,0 +1,44 @@
+# Layer 3: the non-bypassable backstop. --no-verify cannot reach this.
+#
+# Every job here runs on a bare checkout with NO secrets and NO configuration
+# from any adopter. That is deliberate and load-bearing: the engine has to be
+# buildable, testable and contributable by someone who holds none of an
+# adopter's data. A CI job needing an adopter's token list would make the
+# engine undeliverable until an adopter existed, which is a deadlock.
+#
+# Scanning a particular organisation's identifiers is that organisation's job,
+# run from their side with their own list. See scripts/neutrality-check.mjs.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  proofs:
+    name: Proofs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Quoted so Node expands the glob, not the shell. `node --test <dir>`
+      # resolves the directory as a module and fails.
+      - run: node --test "scripts/**/*.test.mjs"
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The gitleaks CLI directly; the wrapper action needs an org licence key.
+      - run: |
+          docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:latest \
+            detect --source . --no-banner --redact

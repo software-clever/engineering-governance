@@ -1,0 +1,70 @@
+# neutrality.tokens.example
+#
+# Template for `neutrality.tokens`, the banned-token list read by
+# scripts/neutrality-check.mjs. Copy this file to `neutrality.tokens` and
+# replace the placeholders with the identifiers of the business adopting this
+# engine.
+#
+#   cp neutrality.tokens.example neutrality.tokens
+#
+# `neutrality.tokens` is GITIGNORED and must never be committed. A tracked list
+# would publish the very identifiers it bans, which is the leak the gate
+# exists to prevent. This `.example` file is tracked because it names nothing.
+#
+# In CI, write `neutrality.tokens` from a repository secret before running the
+# gate. The gate fails closed: a missing or empty file is an error, not a pass.
+#
+# Format
+# ------
+# One token per line. Blank lines and lines starting with `#` are ignored.
+#
+# You only need to list a name ONCE, in any spelling. Matching ignores case,
+# punctuation, spacing and camelCase boundaries, so the single token
+# `examplecorp` already catches all of these:
+#
+#   ExampleCorp          Example Corp         example-corp.com
+#   EXAMPLECORP_API_KEY  exampleCorpClient    jane@examplecorp.co.uk
+#
+# Do not list variants. `examplecorp`, `example corp` and `Example-Corp` are
+# the same token to the scanner, and duplicates only make the list harder to
+# keep true.
+#
+# Keep tokens distinctive. A token that is also an ordinary English word will
+# fire on innocent prose and train you to bypass the gate, which is worse than
+# not having it. Prefer `examplecorp` over `example`, and never list a bare
+# number like a day rate, which would match any occurrence of that figure.
+#
+# Multi-word tokens match only when the words are adjacent, so `acme
+# industries` does not fire on "industries vary between acme suppliers".
+
+# --- Trading names ------------------------------------------------------------
+examplecorp
+example corp ltd
+
+# --- Domains you own (the registrable part is enough) -------------------------
+# `examplecorp` above already covers examplecorp.com and any address at it.
+# Add entries only for domains that do not contain the trading name.
+exampleapp
+getexample
+
+# --- People: staff and contractor names ---------------------------------------
+jane doe
+
+# --- Company registration, VAT and other statutory identifiers ----------------
+12345678
+gb123456789
+
+# --- Clients and engagements --------------------------------------------------
+# The names that must never surface in a shared engine repo.
+northwind
+acme industries
+
+# --- Products, projects and internal codenames --------------------------------
+# Including retired ones. A dead codename still identifies the business.
+bluebird
+tidewater
+
+# --- Infrastructure names that identify the estate ----------------------------
+# Host and shard labels, if yours are meaningful rather than opaque.
+onyxhost
+coralhost

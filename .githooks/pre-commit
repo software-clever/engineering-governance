@@ -1,0 +1,31 @@
+#!/bin/sh
+# Layer 2 (commit time) for this engine repo's own governance.
+#
+# Plain shell, no package manager: this repo must be installable into any
+# checkout, including ones with no package.json. Install with:
+#   sh scripts/setup.sh
+#
+# --no-verify bypasses this, by design and visibly in history. The pre-push
+# hook is the second net, and `--history` is the audit that answers whether
+# anything ever got through.
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node not found on PATH; cannot run the gates." >&2
+  exit 1
+fi
+
+node scripts/neutrality-check.mjs --staged
+status=$?
+
+# Exit 2 means "no token list configured", not "clean". The engine must stay
+# usable by anyone who holds no adopter data, since you cannot leak identifiers
+# you do not have. Say so loudly rather than passing silently: a gate that
+# disappears without a word still reads as protection.
+if [ $status -eq 2 ]; then
+  echo "pre-commit: WARNING - neutrality gate is NOT running (no token list)." >&2
+  echo "  If you hold identifiers that must not enter this repo, stop and run:" >&2
+  echo "    sh scripts/setup.sh" >&2
+  exit 0
+fi
+
+exit $status

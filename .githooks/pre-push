@@ -1,0 +1,33 @@
+#!/bin/sh
+# Layer 2, second net. Push is the point of no return for a remote: once a
+# commit is on a server it may be cloned, cached or indexed, and removing it
+# afterwards does not undo that.
+#
+# The pre-commit hook only sees commits it was present for. This one scans the
+# whole history reachable from the push, so it also catches commits made with
+# --no-verify, made before the token list was configured, or made in a clone
+# that never ran setup.
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push: node not found on PATH; cannot run the gates." >&2
+  exit 1
+fi
+
+node scripts/neutrality-check.mjs --history
+status=$?
+
+if [ $status -eq 2 ]; then
+  echo "pre-push: WARNING - neutrality gate is NOT running (no token list)." >&2
+  echo "  Pushing without it. If you hold identifiers that must not enter this" >&2
+  echo "  repo, stop and run: sh scripts/setup.sh" >&2
+  exit 0
+fi
+
+if [ $status -ne 0 ]; then
+  echo "" >&2
+  echo "pre-push: BLOCKED before anything left this machine." >&2
+  echo "  History is permanent. Rewrite the offending commits rather than" >&2
+  echo "  adding a commit that removes the text, which does not remove it." >&2
+fi
+
+exit $status
