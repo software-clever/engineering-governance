@@ -15,6 +15,8 @@ import {
   loadGates,
   evaluateAll,
   resolveConfigPath,
+  diffArgsFor,
+  namedPaths,
 } from './run-gates.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -117,6 +119,37 @@ test('the shipped template loads exactly as shipped', async () => {
       .sort(),
     'every gate in the template is loaded, so none is silently skipped',
   );
+});
+
+// Nothing is staged in CI, so without a range a gate of inputKind "changes"
+// could never run at the only stage that decides.
+test('a change set comes from staging or from a range', () => {
+  assert.deepEqual(diffArgsFor(['--staged']), ['diff', '--cached']);
+  assert.deepEqual(diffArgsFor(['--range', 'main...HEAD']), ['diff', 'main...HEAD']);
+  assert.equal(diffArgsFor(['--all']), null, 'a whole tree is not a change set');
+  assert.equal(diffArgsFor([]), null);
+});
+
+// Picking one silently would leave the run green while it checked something
+// other than what was asked for.
+test('two change sets at once is an error, not a quiet preference', () => {
+  assert.throws(() => diffArgsFor(['--staged', '--range', 'main...HEAD']), /alternatives/);
+});
+
+// An empty range would otherwise reach git as no argument at all, which
+// resolves to the working tree: a narrower check than the caller asked for,
+// passing under the name of a wider one.
+test('--range without a range is an error rather than a silent whole-tree diff', () => {
+  assert.throws(() => diffArgsFor(['--range']), /needs a git range/);
+  assert.throws(() => diffArgsFor(['--range', '--config', 'x.json']), /needs a git range/);
+});
+
+// A flag's value read as a filename would scan the wrong file and, worse,
+// report it clean.
+test('a flag consumes its value instead of it becoming a target path', () => {
+  assert.deepEqual(namedPaths(['--register', 'rules.md', 'src/a.js']), ['src/a.js']);
+  assert.deepEqual(namedPaths(['--config', 'gates.json', '--range', 'main...HEAD']), []);
+  assert.deepEqual(namedPaths(['a.md', 'b.md']), ['a.md', 'b.md']);
 });
 
 // A gate left inert for want of data is silent, and silence behind a green

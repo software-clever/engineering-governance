@@ -15,7 +15,8 @@
 // enforced while nothing runs, which is this engine's own failure mode
 // reproduced in its configuration.
 //
-// Usage: run-gates.mjs [--staged | --all | <file>...] [--config <path>]
+// Usage: run-gates.mjs [--staged | --range <a>..<b> | --all | <file>...]
+//                      [--config <path>] [--register <path>]
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -42,33 +43,73 @@ function git(args) {
     .filter(Boolean);
 }
 
+// Flags that consume the argument after them. Without this list a value would
+// be read as a filename, so `--register rules.md` would quietly scan the
+// register as if the caller had named it.
+const VALUE_FLAGS = new Set(['--config', '--register', '--range']);
+
 /**
- * The staged change set, with status letters. Some gates ask which paths a
- * change TOUCHES, which is a different question from which files exist, and
- * has no answer outside a diff.
+ * Which git diff produces the change set, or null when the caller is looking
+ * at a tree rather than a diff.
+ *
+ * The two change-set modes answer the same question at different stages.
+ * `--staged` is L2's ("what am I about to commit"); `--range` is L3's ("what
+ * does this pull request change"). Nothing is staged in CI, so without a range
+ * a gate of inputKind "changes" could never run at the only stage that decides.
  */
-function stagedChanges() {
-  return git(['diff', '--cached', '--name-status', '--diff-filter=ACMRD']).map((line) => {
+export function diffArgsFor(argv) {
+  const staged = argv.includes('--staged');
+  const i = argv.indexOf('--range');
+  // The next flag is not this flag's value. Accepting it would send git a
+  // range of "--config", or nothing at all, and a missing range resolves to
+  // the working tree: a narrower check passing under a wider name.
+  const next = i === -1 ? undefined : argv[i + 1];
+  const range = next && !next.startsWith('--') ? next : undefined;
+
+  // Choosing one silently would leave the run green while it checked something
+  // other than what was asked for, which is this engine's own failure mode.
+  if (staged && i !== -1) {
+    throw new Error('--staged and --range are alternatives; pass one, not both.');
+  }
+  if (staged) return ['diff', '--cached'];
+  if (i !== -1 && !range) {
+    throw new Error('--range needs a git range, for example --range main...HEAD');
+  }
+  if (range) return ['diff', range];
+  return null;
+}
+
+/**
+ * The change set, with status letters. Some gates ask which paths a change
+ * TOUCHES, which is a different question from which files exist, and has no
+ * answer outside a diff.
+ */
+function changeSet(diffArgs) {
+  return git([...diffArgs, '--name-status', '--diff-filter=ACMRD']).map((line) => {
     const [status, ...paths] = line.split('\t');
+    // Trailing path, so a rename reports where the file ended up.
     return { status: status[0], path: paths[paths.length - 1] };
   });
 }
 
-function targetPaths(argv) {
-  if (argv.includes('--staged')) {
-    return git(['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
-  }
-  if (argv.includes('--all')) return git(['ls-files']);
-
+export function namedPaths(argv) {
   const named = [];
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--config') {
+    if (VALUE_FLAGS.has(argv[i])) {
       i += 1;
       continue;
     }
     if (!argv[i].startsWith('--')) named.push(argv[i]);
   }
   return named;
+}
+
+// Deletions are in the change set but not in the paths: locked-paths cares that
+// a file was removed, while a text gate cannot read a file that is gone.
+function targetPaths(argv, diffArgs) {
+  if (diffArgs) return git([...diffArgs, '--name-only', '--diff-filter=ACMR']);
+  if (argv.includes('--all')) return git(['ls-files']);
+  return namedPaths(argv);
 }
 
 /**
@@ -169,6 +210,17 @@ export function evaluateAll(gates, files, changes = null, warn = () => {}) {
 
 async function main() {
   const argv = process.argv.slice(2);
+
+  // Arguments are settled before anything is loaded, so a contradictory
+  // invocation is reported as what it is rather than as a git failure later.
+  let diffArgs;
+  try {
+    diffArgs = diffArgsFor(argv);
+  } catch (err) {
+    console.error(`gates: ${err.message}`);
+    process.exit(2);
+  }
+
   const configPath = resolveConfigPath(argv, process.env);
 
   if (!existsSync(configPath)) {
@@ -212,9 +264,20 @@ async function main() {
     return;
   }
 
-  const staged = argv.includes('--staged');
-  const changes = staged ? stagedChanges() : null;
-  const paths = targetPaths(argv);
+  let changes = null;
+  let paths;
+  try {
+    changes = diffArgs ? changeSet(diffArgs) : null;
+    paths = targetPaths(argv, diffArgs);
+  } catch (err) {
+    // A range git cannot resolve is a misconfiguration, and the commonest one
+    // by far has a single cause worth naming outright: CI clones shallow by
+    // default, so there is no merge base to diff against.
+    console.error('gates: git could not read that change set.');
+    console.error(`  ${err.message.split('\n')[0]}`);
+    console.error('  A shallow clone has no merge base. In CI, fetch the full history.');
+    process.exit(2);
+  }
 
   if (paths.length === 0 && (changes === null || changes.length === 0)) {
     console.log('gates: nothing to check.');

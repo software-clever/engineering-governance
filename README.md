@@ -98,6 +98,13 @@ enforces. Rules become live only by being ratified in the instance repository,
 through whatever review the organisation configures there. Edit freely, ratify
 deliberately.
 
+Stating that is not enough, since the one setting that breaks it is a setting an
+adopter controls. So the workflow checks it: `scripts/rules-independence-check.mjs`
+compares the commit the rules were read from against the commit under review and
+refuses to run if they are the same. A check that cannot answer the question
+exits with an error rather than a pass, because "could not tell" and "fine" must
+never look alike.
+
 ## The gates
 
 A gate is a capability, never a rule. `forbidden-patterns` knows how to reject
@@ -131,7 +138,14 @@ Configure them in your own repository and run:
 
 ```sh
 node <engine>/scripts/run-gates.mjs --staged --config governance/gates.json
+node <engine>/scripts/run-gates.mjs --range main...HEAD --config governance/gates.json
 ```
+
+`--staged` is the commit-time question, "what am I about to commit".  `--range`
+is the review-time one, "what does this change alter". Both produce a change
+set, which `locked-paths` needs and a whole tree cannot provide: nothing is
+staged in CI, so without a range that gate could never run at the only stage
+that decides.
 
 [`gates.example.json`](gates.example.json) is the template.
 [`gates/README.md`](gates/README.md) is the contract for writing a new one.
@@ -259,10 +273,14 @@ It is scoped as tightly as the job allows:
    gate parameters, and nothing else.
 2. Configure review on the register path there. That review is what ratifies a
    rule; the engine has no opinion about who approves what.
-3. In each repository you want governed, call the reusable workflow and make it
-   a required status check. Making it required is what closes the obvious
-   bypass: deleting the call leaves a required check permanently unfulfilled,
-   so the pull request blocks rather than passing ungated.
+3. In each repository you want governed, call
+   [`.github/workflows/governance.yml`](.github/workflows/governance.yml) and
+   make it a required status check. Making it required is what closes the
+   obvious bypass: deleting the call leaves a required check permanently
+   unfulfilled, so the pull request blocks rather than passing ungated.
+
+[`ADOPTING.md`](ADOPTING.md) has the caller workflow, the inputs, and how the
+required check is named.
 
 Moving to a different organisation means taking this repo and writing a new
 instance repo. None of the previous organisation's rules travel, which protects
@@ -298,14 +316,16 @@ onboarded.
 | Neutrality gate, commit and push hooks, authoring adapter | Built |
 | Rule register, validator, derived gate registry | Built |
 | Five capability gates and the runner | Built |
-| Reusable CI workflow for adopters to call | Not built |
+| Reusable CI workflow, and the check that the rules are independent | Built, never run |
 
 Nothing claims to be enforced until its mechanism is committed and green, and
 that applies to this table as much as to a register.
 
-The gap that matters today: an adopter wires the gates in by calling the
-scripts themselves. The reusable workflow, and the required-status-check
-pattern that stops a branch from removing its own gate, are the next piece.
+The gap that matters today: the workflow is written and every script it calls
+has a proof, but no caller has ever invoked it. The parts only a real run can
+exercise are therefore unproven: the three checkouts, and resolving the engine
+revision from the ref the workflow was called at. Until a pull request has gone
+through it, treat it as designed rather than working.
 
 ## Licence
 

@@ -100,8 +100,14 @@ node scripts/neutrality-check.mjs --staged    # what pre-commit runs
 node scripts/neutrality-check.mjs --history   # what pre-push runs; audits every commit
 node scripts/neutrality-check.mjs --all       # working tree only
 node scripts/registry-check.mjs --register register.example.md   # validate a register
-node scripts/run-gates.mjs --staged --config <adopter-config>    # run configured gates
+node scripts/run-gates.mjs --staged --config <adopter-config>    # run configured gates (L2)
+node scripts/run-gates.mjs --range main...HEAD --config <cfg>    # the same, over a diff (L3)
+node scripts/rules-independence-check.mjs --rules <dir> --not <commit>
 ```
+
+`--staged` and `--range` are the two ways to get a change set, and gates of
+`inputKind: changes` need one. Nothing is staged in CI, which is why `--range`
+exists.
 
 The token list lives **outside this repo**, at `~/.config/engineering-governance/tokens`
 by default (override with `--tokens` or `$GOVERNANCE_TOKENS`). Never create one

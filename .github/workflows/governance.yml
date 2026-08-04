@@ -1,0 +1,189 @@
+# Layer 3, packaged for an adopter to call. See ADOPTING.md.
+#
+# This is the only stage that decides. A local hook is convenience: it can be
+# skipped with --no-verify, and a clone that never installed it runs nothing.
+# A required status check on a pull request cannot be reached from the branch.
+#
+# Three checkouts, and which is which is the whole design:
+#
+#   subject  the change under review, from the caller's repository
+#   engine   this repository, at the revision this file came from
+#   rules    the adopter's register and gate configuration, at a RATIFIED ref
+#
+# The rules are never read from the subject. If a branch could supply the rules
+# that judge it, weakening a rule and breaking it would arrive together and
+# pass together. That property is asserted by a step below rather than trusted,
+# because a property nothing checks is the kind of claim this engine exists to
+# reject.
+#
+# Nothing here holds adopter data. Every value particular to an organisation
+# arrives as an input or a secret from the caller, which keeps the dependency
+# pointing from the adopter to the engine and never the other way.
+name: Governance
+
+on:
+  workflow_call:
+    inputs:
+      instance-repo:
+        description: 'owner/repo holding the rule register and the gate configuration.'
+        required: true
+        type: string
+      instance-ref:
+        description: >-
+          The ratified ref of that repository. Never a ref belonging to the
+          change under review: that is the one setting that can make this
+          check decorative.
+        required: false
+        default: main
+        type: string
+      register-path:
+        description: 'Path to the register, within the instance repository.'
+        required: false
+        default: rules.md
+        type: string
+      config-path:
+        description: 'Path to the gate configuration, within the instance repository.'
+        required: false
+        default: gates.json
+        type: string
+      node-version:
+        description: 'Node version used to run the engine.'
+        required: false
+        default: '22'
+        type: string
+    secrets:
+      governance_token:
+        description: >-
+          A token that can read the instance repository, and the engine if that
+          is private too. Omit when both are public: the caller's own token
+          already reads public repositories.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the change under review
+        uses: actions/checkout@v4
+        with:
+          path: subject
+          # A pull request diff is taken against the merge base, which a
+          # shallow clone does not have.
+          fetch-depth: 0
+
+      - name: Resolve which engine revision this workflow came from
+        id: engine
+        env:
+          # owner/repo/.github/workflows/governance.yml@refs/heads/main
+          #
+          # Editors and actionlint may flag this as an undefined property. It is
+          # a real context value; their bundled schema is incomplete. Do not
+          # "fix" it by removing it, and if a linter is added here, ignore the
+          # name rather than the file.
+          WORKFLOW_REF: ${{ github.job_workflow_ref }}
+        # Derived rather than taken as an input, so the workflow and the
+        # scripts it calls can never be different versions. An input would let
+        # a caller pin the workflow at one revision and the code at another,
+        # and nothing would report the mismatch.
+        run: |
+          set -eu
+          if [ -z "$WORKFLOW_REF" ]; then
+            echo "Could not determine which engine revision this workflow came from." >&2
+            echo "Nothing is guessed here: a wrong guess would run one version's" >&2
+            echo "workflow against another version's scripts." >&2
+            exit 1
+          fi
+          echo "repo=${WORKFLOW_REF%%/.github/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${WORKFLOW_REF##*@}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the engine
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.engine.outputs.repo }}
+          ref: ${{ steps.engine.outputs.ref }}
+          token: ${{ secrets.governance_token || github.token }}
+          path: engine
+
+      - name: Check out the ratified rules
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.instance-repo }}
+          ref: ${{ inputs.instance-ref }}
+          token: ${{ secrets.governance_token || github.token }}
+          path: rules
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # Only on a pull request. On a push the branch has already been through
+      # whatever review the adopter configured, so rules and subject sharing a
+      # commit is the ordinary case rather than the failure.
+      - name: Assert the rules did not come from the change under review
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          node engine/scripts/rules-independence-check.mjs \
+            --rules rules \
+            --not "$PR_HEAD" \
+            --not "$(git -C subject rev-parse HEAD)"
+
+      - name: Validate the register
+        env:
+          REGISTER: ${{ inputs.register-path }}
+        run: node engine/scripts/registry-check.mjs --register "rules/$REGISTER"
+
+      - name: Work out what changed
+        id: scope
+        working-directory: subject
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -eu
+          range=''
+          if [ "$EVENT" = "pull_request" ]; then
+            # Three dots, from the merge base, and against the head rather than
+            # the merge commit. Two dots from the base tip would also report
+            # whatever landed on the base branch after this one was opened,
+            # failing a change for someone else's commits. This range is the
+            # one a reviewer sees under "Files changed".
+            range="$PR_BASE...$PR_HEAD"
+          elif [ "$EVENT" = "push" ] && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            # Absent after a force push, and all zeroes for a new branch.
+            range="$PUSH_BEFORE..HEAD"
+          fi
+          # Announced either way. A run that quietly checked less than it
+          # appeared to is the failure this engine exists to prevent, and a
+          # green tick looks identical whichever mode produced it.
+          if [ -n "$range" ]; then
+            echo "Scope: the change set $range"
+          else
+            echo "Scope: the whole tree. No diff is available for a '$EVENT' event,"
+            echo "so gates needing a change set will report that they did not run."
+          fi
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+
+      - name: Run the gates
+        working-directory: subject
+        env:
+          RANGE: ${{ steps.scope.outputs.range }}
+          CONFIG: ${{ inputs.config-path }}
+          REGISTER: ${{ inputs.register-path }}
+        # Run from inside the subject, with the configuration read from the
+        # rules checkout by absolute path. The runner resolves both against the
+        # working directory, so this is what keeps the two apart.
+        run: |
+          set -eu
+          if [ -n "$RANGE" ]; then set -- --range "$RANGE"; else set -- --all; fi
+          node "$GITHUB_WORKSPACE/engine/scripts/run-gates.mjs" "$@" \
+            --config "$GITHUB_WORKSPACE/rules/$CONFIG" \
+            --register "$GITHUB_WORKSPACE/rules/$REGISTER"
