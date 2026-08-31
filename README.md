@@ -219,10 +219,23 @@ enforcement therefore names something that demonstrably works.
 
 ## The neutrality gate
 
-`scripts/neutrality-check.mjs` blocks adopter-identifying content from entering
-this repo, at commit time and in CI. It is the mechanism behind the portability
-claim, and it is the first thing that ran here: it landed before any other
-content, so nothing has ever entered this repo ungated.
+`scripts/neutrality-check.mjs` blocks identifying content from entering a
+repository that must not carry it. It is the mechanism behind this engine's own
+portability claim, and it is the first thing that ran here: it landed before any
+other content, so nothing has ever entered this repo ungated.
+
+It is a capability you can point at your own repositories, and it is **the one
+part of this engine that the reusable workflow does not run**. That is
+deliberate, not an omission. Running it in CI would mean putting your token list
+where the workflow can read it, and a list of names that must never appear is
+precisely the file you least want decrypted into a runner. It also would not
+reach a pull request from a fork, which is where secrets stop.
+
+So this gate runs **where the names already are**: on the machines of the people
+who hold them, at authoring, commit and push time, with `--history` as the audit
+that answers "did anything ever get through". Those stages are listed below.
+Nothing about it is enforced at the pull request boundary, and a rule relying on
+it should say so rather than claim `enforced`.
 
 Its banned-token list is **never inside this repository**, not even ignored. A
 file of real names in the working tree is one `git add -f` or one lost ignore
@@ -289,8 +302,10 @@ It is scoped as tightly as the job allows:
 
 ## Adopting it
 
-1. Create a private instance repository. It holds your rule register and your
-   gate parameters, and nothing else.
+1. Create an instance repository, separate from anything it governs. It holds
+   your rule register and your gate parameters, and nothing else. Public or
+   private is your call, and the trade-off is set out in
+   [`ADOPTING.md`](ADOPTING.md).
 2. Configure review on the register path there. That review is what ratifies a
    rule; the engine has no opinion about who approves what.
 3. In each repository you want governed, call

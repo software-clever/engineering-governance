@@ -206,6 +206,51 @@ The scope is printed on every run. A gate that needs a change set says so when
 it does not get one, rather than passing quietly, because a green tick looks the
 same whether a gate ran or was skipped.
 
+## If the project you are governing is open source
+
+Most of this document assumes a closed team governing repositories it controls.
+The mechanism does not care, but three things change, and one of them is a trap.
+
+**Prefer a public instance.** It removes the token entirely and it is the only
+way fork pull requests can be governed at all. Your register then reads as a
+contribution guide with teeth: a contributor can see the rules that will judge
+them before writing anything, which is worth more than the rules being secret.
+
+**Leave the neutrality gate unconfigured unless you actually need it.** It is a
+capability, not a step. A project whose purpose is to be public usually has no
+identifiers to keep out of its own repository, and an unconfigured gate
+correctly does nothing. Configuring one you do not need trains people to work
+around gates, which costs you the ones that matter.
+
+Where it does apply is a project published by a company that still must keep
+customer names, internal hostnames or unreleased codenames out of fixtures and
+test data. If that is you:
+
+- **It is a maintainer-side control, not a contributor-side one.** You cannot
+  hand a confidential list to arbitrary contributors, and you would not want to:
+  a list of names that must never appear is a ready-made list of names worth
+  looking for. Maintainers hold the list, so the gate fires as they write and as
+  they merge. A contributor holding no list is warned and not blocked, which is
+  correct, because nobody can leak what they do not have.
+- **Never make it a required check on a public repository.** Two independent
+  reasons, either sufficient. Secrets do not reach a workflow triggered from a
+  fork, so it would silently not run on exactly the pull requests you most want
+  checked while passing on your own branches, and a green tick covering half the
+  traffic is worse than no tick. And it would decrypt your list of sensitive
+  names into a runner on every push.
+- **The list lives in none of the three repositories**: not the engine, not a
+  public instance, not the project. Only on maintainer machines, backed up
+  somewhere you control.
+
+**The limit to state plainly, rather than let someone discover:** this leaves a
+permanent hole. A contributor can commit a name that nothing catches until a
+maintainer who holds the list touches that file, and `--history` answers "did
+anything ever get through" only after the fact. That is genuinely weaker than a
+closed team where every author holds the list. It is not a defect to be fixed by
+putting the list in CI, because that is the coupling this engine exists without.
+Describe it as a maintainer-side control and it is honest; describe it as
+protection and it is the overclaim this whole engine argues against.
+
 ## Limits worth stating to whoever you onboard
 
 - **Anyone who can change branch protection can remove the requirement.** This

@@ -17,7 +17,7 @@ everyone. `scripts/neutrality-check.mjs` enforces it at commit and in CI, and
 it fails closed.
 
 If a change genuinely needs an adopter's name to make sense, the change belongs
-in that adopter's private instance repository, not here. There is no exception
+in that adopter's own instance repository, not here. There is no exception
 to reach for. The single copyright-notice exemption is described in the README
 and is not a general escape hatch.
 
