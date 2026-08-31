@@ -1,18 +1,32 @@
 # neutrality.tokens.example
 #
-# Template for `neutrality.tokens`, the banned-token list read by
-# scripts/neutrality-check.mjs. Copy this file to `neutrality.tokens` and
-# replace the placeholders with the identifiers of the business adopting this
-# engine.
+# Template for the banned-token list read by scripts/neutrality-check.mjs.
+# This `.example` file is tracked because it names nothing. Your real list is
+# never tracked, in this repository or any other.
 #
-#   cp neutrality.tokens.example neutrality.tokens
+# Where it goes
+# -------------
+# OUTSIDE every repository. `sh scripts/setup.sh` creates it for you at
 #
-# `neutrality.tokens` is GITIGNORED and must never be committed. A tracked list
-# would publish the very identifiers it bans, which is the leak the gate
-# exists to prevent. This `.example` file is tracked because it names nothing.
+#   ~/.config/engineering-governance/tokens
 #
-# In CI, write `neutrality.tokens` from a repository secret before running the
-# gate. The gate fails closed: a missing or empty file is an error, not a pass.
+# and `--tokens <path>` or $GOVERNANCE_TOKENS override that. Do not copy it
+# into a working tree, even an ignored one: a file of real identifiers there is
+# one `git add -f` or one lost ignore rule from a permanent public commit, and
+# removing a hazard beats defending it with a rule. It does not belong in an
+# instance repository either, which may be public.
+#
+# Not in CI, and not in a repository secret
+# ----------------------------------------
+# The gate is a capability this engine provides. Running it against a
+# particular organisation's identifiers is that organisation's job, run from
+# their side, on machines that already hold the names. A CI job needing this
+# list would make the engine unbuildable until an adopter existed.
+#
+# You can only leak identifiers you hold, so someone with no list has nothing
+# to leak and is not blocked: the hooks warn and continue, while invoking the
+# gate directly still fails closed. A missing or empty list is exit 2, an
+# error rather than a pass.
 #
 # Format
 # ------
