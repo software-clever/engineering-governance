@@ -336,16 +336,29 @@ onboarded.
 | Neutrality gate, commit and push hooks, authoring adapter | Built |
 | Rule register, validator, derived gate registry | Built |
 | Five capability gates and the runner | Built |
-| Reusable CI workflow, and the check that the rules are independent | Built, never run |
+| Reusable CI workflow, and the check that the rules are independent | Built, and run against real pull requests |
 
 Nothing claims to be enforced until its mechanism is committed and green, and
 that applies to this table as much as to a register.
 
-The gap that matters today: the workflow is written and every script it calls
-has a proof, but no caller has ever invoked it. The parts only a real run can
-exercise are therefore unproven: the three checkouts, and reading the engine's
-own repository and commit out of the `job` context. Until a pull request has
-gone through it, treat it as designed rather than working.
+The workflow has now been exercised end to end by throwaway caller and instance
+repositories holding invented rules, which is what moved the row above off
+"never run". What those runs establish:
+
+- The engine checks itself out at the **commit** the workflow file came from,
+  read from the `job` context, so the workflow and the scripts it calls cannot
+  be different versions.
+- All three checkouts resolve, and one token covering only the instance is
+  enough when the engine is public.
+- A pull request is scoped to `base...head`, which is what gives a gate of
+  `inputKind: changes` a change set at the only stage that decides.
+- Every configured gate fires on a violation and reports the path without
+  echoing the offending text.
+- A branch that supplies the rules judging it is **refused before any gate
+  runs**, which is the property the whole model rests on.
+- An instance that cannot be read fails the run rather than skipping quietly,
+  and a run that has no diff says so instead of reporting a clean tree as if it
+  had checked one.
 
 One further limit is not ours to close. **A required status check is a paid
 feature on private repositories**, so on a free plan the workflow can report on
