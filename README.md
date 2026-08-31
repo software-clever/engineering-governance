@@ -4,7 +4,7 @@ An engine for making engineering rules enforceable rather than merely written.
 
 It holds **mechanism only**. It contains no rules, no house style, no company
 names and no opinions about how anyone should work. The business adopting it
-supplies all of that from a separate private repository. That separation is
+supplies all of that from a separate repository of their own. That separation is
 what makes the engine portable between organisations, and it is enforced by a
 gate rather than promised in a paragraph.
 
@@ -30,11 +30,25 @@ guardrail is worse than a missing one. People stop checking.
 The separation that makes the engine portable, and the reason it can be shared
 without sharing anything about you.
 
-| Layer | Holds | Example | Where it lives |
-| --- | --- | --- | --- |
-| **1. Mechanism** | Registry schema, validator, workflow plumbing, hook installers, gate interface | "A hard rule naming an unregistered gate fails the build" | This repo |
-| **2. Capability gates** | Parameterised checkers, shipped with no defaults | `forbidden-chars`, taking a codepoint list | This repo |
-| **3. Rules and config** | The rule records, and the parameters they pass to gates | "R-1: no em dashes. Hard. `forbidden-chars` with `U+2014`" | Your private instance repo |
+| Layer | Holds | Example | Where it lives | Visibility |
+| --- | --- | --- | --- | --- |
+| **1. Mechanism** | Registry schema, validator, workflow plumbing, hook installers, gate interface | "A hard rule naming an unregistered gate fails the build" | This repo | Public |
+| **2. Capability gates** | Parameterised checkers, shipped with no defaults | `forbidden-chars`, taking a codepoint list | This repo | Public |
+| **3. Rules and config** | The rule records, and the parameters they pass to gates | "R-1: no em dashes. Hard. `forbidden-chars` with `U+2014`" | Your instance repo | Your choice |
+
+Three things the visibility column is saying, each of which is a decision rather
+than an accident:
+
+- **The engine is public**, so that a repository of any visibility can call it.
+  A public repository can only call a reusable workflow held in a public one, so
+  a private engine would quietly exclude every open project from being governed.
+- **The instance is a separate repository, read at a ratified ref**, and whether
+  it is public or private is yours to pick. What makes the model work is
+  separation and controlled write access, not secrecy. The trade-off between the
+  two choices is set out in [`ADOPTING.md`](ADOPTING.md).
+- **The token list is in neither**, living outside every repository. It is the
+  one part of layer 3 that is genuinely confidential, and keeping it out is what
+  leaves the instance free to be public at all.
 
 Layer 2 is where portability is won or lost. A gate named after a house rule,
 or one that ships that rule as a default, has collapsed layers 2 and 3 and is
@@ -79,6 +93,12 @@ are enforcement stages, a different axis from the three content layers above.
 
 **L3 is the only stage that decides.** L2 is convenience and fast feedback. L1
 is a courtesy that saves a round trip. Any rule that matters lands in L3.
+
+It decides only where the check is actually **required**, which is a setting on
+the repository rather than anything this engine controls, and one that is a paid
+feature on private repositories. A workflow that runs and reports without being
+required looks identical to one that decides, and is not one. Confirm which you
+have before describing a rule as enforced; see [`ADOPTING.md`](ADOPTING.md).
 
 L1 is deliberately isolated under `adapters/`, one directory per assistant, so
 an organisation using a different tool (or none) deletes that directory and
@@ -323,9 +343,16 @@ that applies to this table as much as to a register.
 
 The gap that matters today: the workflow is written and every script it calls
 has a proof, but no caller has ever invoked it. The parts only a real run can
-exercise are therefore unproven: the three checkouts, and resolving the engine
-revision from the ref the workflow was called at. Until a pull request has gone
-through it, treat it as designed rather than working.
+exercise are therefore unproven: the three checkouts, and reading the engine's
+own repository and commit out of the `job` context. Until a pull request has
+gone through it, treat it as designed rather than working.
+
+One further limit is not ours to close. **A required status check is a paid
+feature on private repositories**, so on a free plan the workflow can report on
+a private repository but cannot block a merge there. The mechanism is complete;
+whether it decides anything depends on the plan the repository sits on. See the
+plan note in [`ADOPTING.md`](ADOPTING.md), and do not resolve it by making a
+repository public.
 
 ## Licence
 

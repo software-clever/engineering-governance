@@ -9,7 +9,7 @@ this repository names an organisation, including its own examples.
 ## 1. Create the instance repository
 
 The engine holds mechanism. Everything particular to you lives in a repository
-of your own, usually private:
+of your own:
 
 ```
 <your-instance>/
@@ -22,6 +22,37 @@ Both paths are configurable; these are the defaults.
 Then configure review on the register path there. **That review is the
 ratification.** The engine has no opinion about who approves what, and it never
 asks: it reads whatever the ratified ref holds and enforces that.
+
+It has to be a **separate repository from the ones you are governing**, and it
+has to be read at a ref whose write access you control. That is what stops a
+branch supplying the rules that judge it. Everything else about it, including
+whether it is public, is yours.
+
+### Choosing its visibility
+
+Both work, the engine requires neither, and the choice has consequences worth
+making deliberately.
+
+| Instance | Token | Fork pull requests on a public governed repo | What it costs |
+| --- | --- | --- | --- |
+| **Private** | `governance_token` required | **Fail closed.** GitHub does not pass secrets to a workflow triggered from a fork, so the instance cannot be checked out and the job fails. | Nothing |
+| **Public** | None needed | Work normally | Publishes your `locked-paths`, which names your crown-jewel files, and your `forbidden-patterns`, which shows what you are guarding against |
+
+Decide on **what you are putting in the register**, not on what kind of
+organisation you are. For an open project a public instance is usually right:
+the register becomes a contribution guide with teeth, and contributors can read
+the rules that will judge them before they write anything. For a closed one, a
+published gate configuration is a map of what you consider valuable.
+
+Do not reach for `pull_request_target` to work around the fork case. It runs the
+base branch's workflow against the fork's code, which hands the change under
+review the thing this design exists to keep away from it.
+
+**Your banned-token list, if you use the neutrality gate, belongs in neither
+repository.** It lives outside version control entirely; see
+`scripts/neutrality-check.mjs`. A tracked list of real identifiers is one
+`git add -f` from being permanent, and in a public instance it would publish
+precisely what the gate exists to keep out.
 
 ## 2. Call the workflow
 
@@ -60,6 +91,38 @@ is private. Omit it when both are public: the calling repository's own token
 already reads public repositories. It needs read access to those repositories
 and nothing else.
 
+### If you keep your own copy of the engine
+
+You will usually hold the engine in your own organisation rather than calling
+someone else's. Two settings decide whether that works, and both fail in ways
+that give no hint at the call site.
+
+**Its visibility limits which repositories can call it.** GitHub's rule, not
+this engine's:
+
+| Repository being governed | Engine repositories it can call |
+| --- | --- |
+| `private` | `private` and `public` |
+| `public` | `public` only |
+
+So a private engine copy silently excludes every public repository you own from
+being governed. If any of them is public, your copy has to be public too. Do not
+solve this by changing the governed repository's visibility: that changes what
+the world can see in order to satisfy a build, which is a bad trade in every
+direction.
+
+**A private engine copy also needs its access policy opened**, or nothing can
+call it whatever else you configure. In its Actions settings, set Access to
+allow repositories in your organisation:
+
+```sh
+gh api -X PUT repos/<your-org>/<engine-copy>/actions/permissions/access \
+  -f access_level=organization
+```
+
+The default is `none`, meaning only that repository itself may use its
+workflows. A caller hitting this fails at the `uses:` line before any step runs.
+
 **Never point `instance-ref` at the change under review.** A branch that
 supplies its own rules can weaken a rule and break it in the same pull request
 and pass both. The workflow refuses to run when it detects this, but the setting
@@ -94,6 +157,27 @@ governance / Governance
 Read it off the checks list on a real pull request rather than typing it from
 memory. A required check whose name does not match anything that ever reports
 blocks every pull request permanently, and the failure gives no hint why.
+
+### Check your plan supports this, before relying on it
+
+Required status checks are a paid feature on private repositories. GitHub's
+gating, quoted from its documentation:
+
+> Rulesets are available in public repositories with GitHub Free and GitHub Free
+> for organizations, and in public and private repositories with GitHub Pro,
+> GitHub Team, and GitHub Enterprise Cloud.
+
+Protected branches are gated identically. So on a free plan with **private**
+repositories, this step is unavailable, and everything above it runs and reports
+but **cannot block a merge**.
+
+That is a legitimate place to be, and it is only dangerous if you misdescribe
+it. If it applies to you, record the enforcement stage honestly in your register
+rather than marking rules `enforced` on the strength of a check that reports
+into the void. An overclaimed guardrail is worse than a missing one, which is
+the argument this whole engine rests on. The remedy is a plan that supports
+rulesets on private repositories; it is not making a repository public to
+qualify.
 
 ### Why "required" is the load-bearing word
 
@@ -134,3 +218,7 @@ same whether a gate ran or was skipped.
 - **Local hooks are convenience.** `--no-verify` skips them and a fresh clone
   has none. Only the pull request boundary decides, which is why the required
   check is step 3 and not an optional extra.
+- **A private instance cannot govern fork pull requests.** Secrets do not reach
+  a workflow triggered from a fork, so the instance checkout fails and the job
+  fails with it. It fails closed rather than passing quietly, but if you take
+  outside contributions, choose a public instance. See step 1.

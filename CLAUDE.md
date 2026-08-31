@@ -21,6 +21,50 @@ in that adopter's private instance repository, not here. There is no exception
 to reach for. The single copyright-notice exemption is described in the README
 and is not a general escape hatch.
 
+## Four settled constraints
+
+Decided, not open. A session that re-derives these wastes its time and usually
+arrives somewhere worse, because each one exists to close a hole that looked
+harmless from inside a single change.
+
+**1. This engine is intended to be public.** Never design anything that depends
+on it being private, and never put anything in it that could not be published.
+Publication is a question of when, not whether.
+
+**2. An instance repository is always a *separate* repository from the subject,
+read at a ratified ref.** Write access to that ref is the ratification boundary.
+Its **visibility is the adopter's choice**, and the engine must work with either
+and require neither.
+
+The load-bearing property is separation, not privacy. What
+`scripts/rules-independence-check.mjs` defends is that a branch cannot supply
+the rules that judge it, and that breaks when the instance is the same
+repository as the subject, or sits on a ref a contributor controls. A public
+instance that is separate and protected preserves the property completely.
+
+**3. A subject repository's visibility is never changed to suit the engine or an
+instance.** The engine fits the repositories an organisation already has. If a
+property can only be demonstrated by making a subject public, it is not
+demonstrated.
+
+**4. No property is ever proven against a real instance repository.** Proofs use
+purpose-built throwaway repositories holding invented rules. A real instance
+holds an organisation's actual governance data, and borrowing it for a
+demonstration exposes that data to prove something a fixture proves equally
+well.
+
+### What follows from them
+
+Rule 3 forces rule 1. A public caller can only call a reusable workflow in a
+public repository, so if any governed repository is public, and its visibility
+may not be changed to suit us, this engine has to be public.
+
+Rule 2 makes instance visibility a documented trade-off rather than a rule. See
+the table in [`ADOPTING.md`](ADOPTING.md): a private instance needs a token and
+fails closed on fork pull requests; a public instance needs no credential but
+publishes your `locked-paths` and `forbidden-patterns`, which is a reasonable
+trade for an open project and reconnaissance for a closed one.
+
 ## Why this repo sits outside any parent workspace
 
 It lives at the filesystem root alongside other repos, deliberately **not**
@@ -113,6 +157,12 @@ The token list lives **outside this repo**, at `~/.config/engineering-governance
 by default (override with `--tokens` or `$GOVERNANCE_TOKENS`). Never create one
 inside the tree, even ignored: a file of real names here is one `git add -f`
 from a permanent public commit.
+
+**Nor inside an instance repository.** The same argument applies there with more
+force, because an instance may be public (constraint 2), and a tracked list of
+real identifiers in a public repository publishes exactly what the gate exists
+to keep out. Keeping the list out of every repository is what leaves instance
+visibility free to be a choice.
 
 Exit `2` means "no list configured", not "clean". The hooks treat it as a
 warning and continue, because someone holding no adopter data cannot leak any

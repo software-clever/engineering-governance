@@ -75,36 +75,45 @@ jobs:
           # shallow clone does not have.
           fetch-depth: 0
 
-      - name: Resolve which engine revision this workflow came from
-        id: engine
+      # Checked rather than trusted, because the failure is silent otherwise.
+      # actions/checkout given an empty repository falls back to the caller's
+      # own repository, so an unset value here would check the SUBJECT out as
+      # the engine and every step after it would run the change under review
+      # against itself. A value that is missing has to stop the job.
+      #
+      # job.workflow_* is not available on GitHub Enterprise Server. An adopter
+      # there gets this error rather than a wrong answer, which is the intended
+      # outcome for an unsupported host.
+      - name: Confirm the workflow knows which engine revision it came from
         env:
-          # owner/repo/.github/workflows/governance.yml@refs/heads/main
-          #
-          # Editors and actionlint may flag this as an undefined property. It is
-          # a real context value; their bundled schema is incomplete. Do not
-          # "fix" it by removing it, and if a linter is added here, ignore the
-          # name rather than the file.
-          WORKFLOW_REF: ${{ github.job_workflow_ref }}
-        # Derived rather than taken as an input, so the workflow and the
-        # scripts it calls can never be different versions. An input would let
-        # a caller pin the workflow at one revision and the code at another,
-        # and nothing would report the mismatch.
+          WORKFLOW_REPO: ${{ job.workflow_repository }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           set -eu
-          if [ -z "$WORKFLOW_REF" ]; then
+          if [ -z "$WORKFLOW_REPO" ] || [ -z "$WORKFLOW_SHA" ]; then
             echo "Could not determine which engine revision this workflow came from." >&2
             echo "Nothing is guessed here: a wrong guess would run one version's" >&2
-            echo "workflow against another version's scripts." >&2
+            echo "workflow against another version's scripts, and an empty value" >&2
+            echo "would quietly check out the change under review in its place." >&2
+            echo "job.workflow_* is unavailable on GitHub Enterprise Server." >&2
             exit 1
           fi
-          echo "repo=${WORKFLOW_REF%%/.github/*}" >> "$GITHUB_OUTPUT"
-          echo "ref=${WORKFLOW_REF##*@}" >> "$GITHUB_OUTPUT"
+          echo "Engine: $WORKFLOW_REPO at $WORKFLOW_SHA"
 
+      # Read from the job context rather than taken as an input, so the workflow
+      # and the scripts it calls can never be different versions. An input would
+      # let a caller pin the workflow at one revision and the code at another,
+      # and nothing would report the mismatch.
+      #
+      # workflow_sha, not workflow_ref: the commit the workflow file came from,
+      # never the branch it was called by. A branch ref would let that branch
+      # move between this run starting and this step, which is the same version
+      # skew in a slower form.
       - name: Check out the engine
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.engine.outputs.repo }}
-          ref: ${{ steps.engine.outputs.ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           token: ${{ secrets.governance_token || github.token }}
           path: engine
 

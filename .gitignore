@@ -1,7 +1,11 @@
 # The banned-token list read by scripts/neutrality-check.mjs. Never committed:
 # a tracked list would publish the identifiers it exists to keep out. The
-# tracked template is neutrality.tokens.example. CI writes this file from a
-# repository secret.
+# tracked template is neutrality.tokens.example.
+#
+# Nothing writes here. The list lives outside the repository entirely, at
+# ~/.config/engineering-governance/tokens, because defending a hazard with an
+# ignore rule is weaker than not having the file. This entry is depth, not the
+# mechanism.
 neutrality.tokens
 
 # Gate parameters and rule records belong to the adopting business (layer 3),
